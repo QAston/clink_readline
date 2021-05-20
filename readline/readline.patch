@@ -1,0 +1,327 @@
+diff --git a/readline/readline/complete.c b/readline/readline/complete.c
+index e67cfeb..22b7176 100644
+--- a/readline/readline/complete.c
++++ b/readline/readline/complete.c
+@@ -2333,9 +2333,15 @@ rl_filename_completion_function (text, state)
+ 	      dirlen = strlen (users_dirname);
+ 	      temp = (char *)xmalloc (2 + dirlen + D_NAMLEN (entry));
+ 	      strcpy (temp, users_dirname);
++/* begin_clink_change
++ * Removed appending of a '/' to correctly support volume-relative paths.
++ */
++#if 0
+ 	      /* Make sure that temp has a trailing slash here. */
+ 	      if (users_dirname[dirlen - 1] != '/')
+ 		temp[dirlen++] = '/';
++#endif
++/* end_clink_change */
+ 	    }
+ 
+ 	  strcpy (temp + dirlen, convfn);
+diff --git a/readline/readline/complete.c b/readline/readline/complete.c
+index 0aec9c1..e5ce3e2 100644
+--- a/readline/readline/complete.c
++++ b/readline/readline/complete.c
+@@ -933,6 +933,14 @@ _rl_find_completion_word (fp, dp)
+       /* FOUND_QUOTE is set so we know what kind of quotes we found. */
+       for (scan = pass_next = 0; scan < end; scan = MB_NEXTCHAR (rl_line_buffer, scan, 1, MB_FIND_ANY))
+ 	{
++/* begin_clink_change
++ * The following assumes we want to use backslashes to escape the next
++ * character. This doesn't apply on Windows as a \ is the part separator. Removing
++ * this code stops strings like the following getting misunderstood by readline;
++ *
++ * c:\>foobar.bat "c:\Program Files\"
++ */
++#if 0
+ 	  if (pass_next)
+ 	    {
+ 	      pass_next = 0;
+@@ -949,6 +957,8 @@ _rl_find_completion_word (fp, dp)
+ 	      found_quote |= RL_QF_BACKSLASH;
+ 	      continue;
+ 	    }
++#endif
++/* end_clink_change */
+ 
+ 	  if (quote_char != '\0')
+ 	    {
+diff --git a/readline/readline/bind.c b/readline/readline/bind.c
+index 59e7964..1b12df1 100644
+--- a/readline/readline/bind.c
++++ b/readline/readline/bind.c
+@@ -1106,6 +1106,17 @@ parser_include (args)
+ 
+   return r;
+ }
++
++/* begin_clink_change
++ * MSVC has issue with "int foo(bar) char* bar; { ... } syntax. It considers the
++ * function to have no arguments and complains when assigning function pointer
++ * to a variable. The workaround is to forward declare them _before_ assignment.
++ */
++int parser_if(char*);
++int parser_endif(char*);
++int parser_else(char*);
++int parser_include(char*);
++/* end_clink_change */
+   
+ /* Associate textual names with actual functions. */
+ static const struct {
+diff --git a/readline/readline/signals.c b/readline/readline/signals.c
+index 6a68d78..faf7803 100644
+--- a/readline/readline/signals.c
++++ b/readline/readline/signals.c
+@@ -64,7 +64,12 @@
+ 
+ /* This typedef is equivalent to the one for Function; it allows us
+    to say SigHandler *foo = signal (SIGKILL, SIG_IGN); */
+-typedef RETSIGTYPE SigHandler ();
++/* begin_clink_change
++ * Address MSVC compiler warnings. signal() returns type "void (*)(int)".
++ */
++//typedef RETSIGTYPE SigHandler ();
++typedef RETSIGTYPE SigHandler (int);
++/* end_clink_change */
+ 
+ #if defined (HAVE_POSIX_SIGNALS)
+ typedef struct sigaction sighandler_cxt;
+diff --git a/readline/readline/input.c b/readline/readline/input.c
+index 7c74c99..e59bad6 100644
+--- a/readline/readline/input.c
++++ b/readline/readline/input.c
+@@ -169,7 +169,12 @@ rl_gather_tyi ()
+   int tty;
+   register int tem, result;
+   int chars_avail, k;
+-  char input;
++/* begin_clink_change
++ * MSVC compile error
++ */
++  //char input;
++  char input = 0;
++/* end_clink_change */
+ #if defined(HAVE_SELECT)
+   fd_set readfds, exceptfds;
+   struct timeval timeout;
+diff --git a/readline/readline/bind.c b/readline/readline/bind.c
+index 1b12df1..4c898a6 100644
+--- a/readline/readline/bind.c
++++ b/readline/readline/bind.c
+@@ -1112,10 +1112,12 @@ parser_include (args)
+  * function to have no arguments and complains when assigning function pointer
+  * to a variable. The workaround is to forward declare them _before_ assignment.
+  */
++#ifdef _MSC_VER
+ int parser_if(char*);
+ int parser_endif(char*);
+ int parser_else(char*);
+ int parser_include(char*);
++#endif
+ /* end_clink_change */
+   
+ /* Associate textual names with actual functions. */
+diff --git a/readline/readline/complete.c b/readline/readline/complete.c
+index e5ce3e2..3ed21cc 100644
+--- a/readline/readline/complete.c
++++ b/readline/readline/complete.c
+@@ -2031,7 +2031,12 @@ rl_username_completion_function (text, state)
+      const char *text;
+      int state;
+ {
+-#if defined (__WIN32__) || defined (__OPENNT)
++/*
++ * begin_clink_change
++ * Disable username completion.
++ */
++#if defined (__WIN32__) || defined (__OPENNT) || 1
++/* end_clink_change */
+   return (char *)NULL;
+ #else /* !__WIN32__ && !__OPENNT) */
+   static char *username = (char *)NULL;
+diff --git a/readline/readline/rldefs.h b/readline/readline/rldefs.h
+index 0257754..e211213 100644
+--- a/readline/readline/rldefs.h
++++ b/readline/readline/rldefs.h
+@@ -40,7 +40,11 @@
+ #  if defined (HAVE_TERMIO_H)
+ #    define TERMIO_TTY_DRIVER
+ #  else
+-#    if !defined (__MINGW32__)
++/* begin_clink_change
++ * Ensure NO_TTY_DRIVER is defined
++ */
++#    if !defined (__MINGW32__) && 0
++/* end_clink_change */
+ #      define NEW_TTY_DRIVER
+ #    else
+ #      define NO_TTY_DRIVER
+diff --git a/readline/readline/vi_mode.c b/readline/readline/vi_mode.c
+index 41e1dbb..4743444 100644
+--- a/readline/readline/vi_mode.c
++++ b/readline/readline/vi_mode.c
+@@ -677,6 +677,12 @@ int
+ rl_vi_insertion_mode (count, key)
+      int count, key;
+ {
++/* begin_clink_change
++ * Change cursor appearance to reflect vi edit mode
++ */
++  _rl_set_cursor(RL_IM_INSERT, 1);
++/* end_clink_change */
++
+   _rl_keymap = vi_insertion_keymap;
+   _rl_vi_last_key_before_insert = key;
+   return (0);
+@@ -718,6 +724,11 @@ _rl_vi_save_insert (up)
+ void
+ _rl_vi_done_inserting ()
+ {
++/* begin_clink_change
++ * Change cursor appearance to reflect vi edit mode
++ */
++  _rl_set_cursor(RL_IM_OVERWRITE, 1);
++/* end_clink_change */
+   if (_rl_vi_doing_insert)
+     {
+       /* The `C', `s', and `S' commands set this. */
+@@ -1909,6 +1920,12 @@ rl_vi_replace (count, key)
+ {
+   int i;
+ 
++/* begin_clink_change
++ * Change cursor appearance to reflect vi edit mode
++ */
++  _rl_set_cursor(RL_IM_INSERT, 1);
++/* end_clink_change */
++
+   vi_replace_count = 0;
+ 
+   if (!vi_replace_map)
+diff --git a/readline/compat/config.h b/readline/compat/config.h
+index fe2aa39..907b46d 100644
+--- a/readline/compat/config.h
++++ b/readline/compat/config.h
+@@ -65,9 +65,9 @@ int                         hooked_fstat(int, struct hooked_stat*);
+ #   define snprintf         _snprintf
+ 
+ #   define __STDC__         0
++#   define __MSDOS__
+ /*
+ #   define __MINGW32__
+-#   define __MSDOS__
+ #   define __WIN32__
+ */
+ 
+diff --git a/readline/readline/display.c b/readline/readline/display.c
+index e4105ee..c520ea2 100644
+--- a/readline/readline/display.c
++++ b/readline/readline/display.c
+@@ -55,6 +55,15 @@
+ #include "rlprivate.h"
+ #include "xmalloc.h"
+ 
++/* begin_clink_change
++ * __MSDOS__ is used for both platform-specific file handling and terminal
++ * display, but Clink has a sufficient implementation of the Termcap library.
++ */
++#ifdef __MSDOS__
++#   undef __MSDOS__
++#endif
++/* end_clink_change */
++
+ #if !defined (strchr) && !defined (__STDC__)
+ extern char *strchr (), *strrchr ();
+ #endif /* !strchr && !__STDC__ */
+diff --git a/readline/readline/readline.c b/readline/readline/readline.c
+index f2e4d93..5fb030c 100644
+--- a/readline/readline/readline.c
++++ b/readline/readline/readline.c
+@@ -1133,7 +1133,11 @@ bind_arrow_keys_internal (map)
+   xkeymap = _rl_keymap;
+   _rl_keymap = map;
+ 
+-#if defined (__MSDOS__)
++/* begin_clink_change
++ * Clink's inputrc takes care of this.
++ */
++#if defined (__MSDOS__) && 0
++/* end_clink_change */
+   rl_bind_keyseq_if_unbound ("\033[0A", rl_get_previous_history);
+   rl_bind_keyseq_if_unbound ("\033[0B", rl_backward_char);
+   rl_bind_keyseq_if_unbound ("\033[0C", rl_forward_char);
+diff --git a/readline/readline/vi_mode.c b/readline/readline/vi_mode.c
+index 4743444..f7eda95 100644
+--- a/readline/readline/vi_mode.c
++++ b/readline/readline/vi_mode.c
+@@ -560,6 +560,15 @@ rl_vi_bword (count, ignore)
+ 	  whitespace (rl_line_buffer[rl_point - 1]))
+ 	rl_point--;
+ 
++/* begin_clink_change
++ * Out-of-bounds array access when going backwards one word when rl_point is at
++ * the start of the first word, and there's one space character at the start of
++ * the line (i.e. rl_point == 1).
++ */
++      if (rl_point <= 0)
++          break;
++/* end_clink_change */
++
+       /* If this character and the previous character are `opposite', move
+ 	 back so we don't get messed up by the rl_point++ down there in
+ 	 the while loop.  Without this code, words like `l;' screw up the
+diff --git a/readline/readline/misc.c b/readline/readline/misc.c
+index 9f45773..1bb6b1f 100644
+--- a/readline/readline/misc.c
++++ b/readline/readline/misc.c
+@@ -623,6 +623,13 @@ rl_emacs_editing_mode (count, key)
+   rl_editing_mode = emacs_mode;
+   _rl_set_insert_mode (RL_IM_INSERT, 1); /* emacs mode default is insert mode */
+   _rl_keymap = emacs_standard_keymap;
++
++/* begin_clink_change
++ * Change cursor appearance to reflect vi edit mode
++ */
++  _rl_set_cursor(RL_IM_INSERT, 1);
++/* end_clink_change */
++
+   return 0;
+ }
+ 
+diff --git a/premake4.lua b/premake4.lua
+diff --git a/readline/readline/text.c b/readline/readline/text.c
+index 536e31a..8f5aa22 100644
+--- a/readline/readline/text.c
++++ b/readline/readline/text.c
+@@ -1004,7 +1004,13 @@ int
+ rl_do_lowercase_version (ignore1, ignore2)
+      int ignore1, ignore2;
+ {
+-  return 0;
++/* begin_clink_change
++ * This function was the same as _rl_null_function(). MSVC's linker would
++ * give these two symbols the same address such that do_lowercase == null_func
++ * which breaks function pointer comparisons in RL's subseq dispatching...
++ */
++  return 1;
++/* end_clink_change */
+ }
+ 
+ /* This is different from what vi does, so the code's not shared.  Emacs
+diff --git a/readline/readline/complete.c b/readline/readline/complete.c
+index 3ed21cc..03bcbde 100644
+--- a/readline/readline/complete.c
++++ b/readline/readline/complete.c
+@@ -1309,6 +1309,12 @@ postprocess_matches (matchesp, matching_filenames)
+   char *t, **matches, **temp_matches;
+   int nmatch, i;
+ 
++/* begin_clink_change
++ * Always postprocess matches even if they're not filenames.
++ */
++  matching_filenames = 1;
++/* end_clink_change */
++
+   matches = *matchesp;
+ 
+   if (matches == 0)
